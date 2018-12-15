@@ -133,27 +133,20 @@ void waitForTouchEvent(tsPoint_t * point)
   uint16_t x, y;
   tft.touchRead(&x, &y);
   delay(1);
-
-  /* Wait around for a new touch event (INT pin goes low) */
-  while (digitalRead(RA8875_INT))
-  {
-  }
   
   /* Make sure this is really a touch event */
   if (tft.touched())
   {
-    tft.touchRead(&x, &y);
-    point->x = x;
-    point->y = y;
-    Serial.print("Touch: ");
-    Serial.print(point->x); Serial.print(", "); Serial.println(point->y);
-  }
-  else
-  {
-    point->x = 0;
-    point->y = 0;
+    if( tft.touchRead(&x, &y, true) )
+    {
+      point->x = x;
+      point->y = y;
+      Serial.print("Touch: ");
+      Serial.print(point->x); Serial.print(", "); Serial.println(point->y);
+    }
   }
 }
+
 
 /**************************************************************************/
 /*!
@@ -290,6 +283,9 @@ void setup()
   pinMode(RA8875_INT, INPUT);
   digitalWrite(RA8875_INT, HIGH);
   tft.touchEnable(true);
+
+  // Enable smoothing with a cicular fifo of 50 values
+  tft.touchSmoothed(50);
 
   // Try some GFX acceleration!
   //tft.drawCircle(100, 100, 50, RA8875_BLACK);

@@ -63,6 +63,12 @@
 Adafruit_RA8875::Adafruit_RA8875(uint8_t CS, uint8_t RST) : Adafruit_GFX(800, 480) {
   _cs = CS;
   _rst = RST;
+  
+  _touchSmoothedSize = 0;
+  _touchSmoothedFilledCount = 0;
+  _touchSmoothedIndex = 0;
+  _touchSmoothedX = NULL;
+  _touchSmoothedY = NULL;
 }
 
 /**************************************************************************/
@@ -1139,7 +1145,26 @@ void Adafruit_RA8875::touchEnable(boolean on)
 /**************************************************************************/
 boolean Adafruit_RA8875::touched(void) 
 {
-  if (readReg(RA8875_INTC2) & RA8875_INTC2_TP) return true;
+  static bool first = true;
+  
+  if (readReg(RA8875_INTC2) & RA8875_INTC2_TP)
+  {
+   // Serial.println("here");
+   /* if( first == true )
+    {
+      first = false;
+      _touchSmoothedFilledCount = 0;
+      _touchSmoothedIndex = 0;
+      
+      Serial.println("yep");
+    }*/
+    
+    return true;
+  }
+  
+  _touchSmoothedFilledCount = 0;
+  _touchSmoothedIndex = 0;
+  
   return false;
 }
 
@@ -1154,10 +1179,11 @@ boolean Adafruit_RA8875::touched(void)
             the RA8875, resetting the flag used by the 'touched' function
 */
 /**************************************************************************/
-boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y) 
+boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y, bool smoothed)
 {
   uint16_t tx, ty;
   uint8_t temp;
+  bool res;
   
   tx = readReg(RA8875_TPXH);
   ty = readReg(RA8875_TPYH);
@@ -1167,13 +1193,86 @@ boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y)
   tx |= temp & 0x03;        // get the bottom x bits
   ty |= (temp >> 2) & 0x03; // get the bottom y bits
 
-  *x = tx;
-  *y = ty;
+  if( !_touchSmoothedSize || smoothed == false)
+  {
+    *x = tx;
+    *y = ty;
+
+    res = true;
+  }
+  else
+  {
+    if( _touchSmoothedFilledCount < _touchSmoothedSize )
+    {
+      // Buffering data
+      _touchSmoothedX[_touchSmoothedIndex] = tx;
+      _touchSmoothedY[_touchSmoothedIndex] = ty;
+      _touchSmoothedFilledCount++;
+      _touchSmoothedIndex++;
+      
+      if( _touchSmoothedIndex == _touchSmoothedSize )
+      {
+        _touchSmoothedIndex       = 0;
+        _touchSmoothedFilledCount = _touchSmoothedSize;
+      }
+
+      // *x and *y not set yet cause we do not have enough data
+      res = false;
+    }
+    else
+    {
+      // Store value in circular fifo
+      _touchSmoothedX[_touchSmoothedIndex] = tx;
+      _touchSmoothedY[_touchSmoothedIndex] = ty;
+      
+      // Go to next index
+      _touchSmoothedIndex++;
+      if( _touchSmoothedIndex == _touchSmoothedSize ) _touchSmoothedIndex = 0;
+
+      // Average values
+      unsigned long tmpX=0,tmpY=0;
+      for(uint8_t i=0; i<_touchSmoothedSize; i++)
+      {
+        tmpX += _touchSmoothedX[i];
+        tmpY += _touchSmoothedY[i];
+      }
+      *x = tmpX/_touchSmoothedSize;
+      *y = tmpY/_touchSmoothedSize;
+      
+      //*x = tx;
+      //*y = ty;
+
+      res = true;
+    }
+  }
 
   /* Clear TP INT Status */
   writeReg(RA8875_INTC2, RA8875_INTC2_TP);
+  
+  return res;
+}
 
-  return true;
+void Adafruit_RA8875::touchSmoothed(uint8_t touchSmoothedSize)
+{
+  if( _touchSmoothedSize != touchSmoothedSize )
+  {
+    if( _touchSmoothedSize )
+    {
+      // Free old circular fifo
+      free(_touchSmoothedX); _touchSmoothedX = NULL;
+      free(_touchSmoothedY); _touchSmoothedY = NULL;
+      _touchSmoothedFilledCount = 0;
+      _touchSmoothedSize = 0;
+    }
+
+    if( touchSmoothedSize )
+    {
+      // Allocate new circular fifo
+      _touchSmoothedSize = touchSmoothedSize;
+      _touchSmoothedX = (uint16_t*)malloc(sizeof(uint16_t)*_touchSmoothedSize);
+      _touchSmoothedY = (uint16_t*)malloc(sizeof(uint16_t)*_touchSmoothedSize);
+    }
+  }
 }
 
 /**************************************************************************/

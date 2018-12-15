@@ -115,7 +115,8 @@ class Adafruit_RA8875 : public Adafruit_GFX {
   /* Touch screen */
   void    touchEnable(boolean on);
   boolean touched(void);
-  boolean touchRead(uint16_t *x, uint16_t *y);
+  boolean touchRead(uint16_t *x, uint16_t *y, bool smoothed = false);
+  void    touchSmoothed(uint8_t);
 
   /* Low level access */
   void    writeReg(uint8_t reg, uint8_t val);
@@ -153,6 +154,12 @@ class Adafruit_RA8875 : public Adafruit_GFX {
   uint16_t _width, _height;
   uint8_t _textScale;
   enum RA8875sizes _size;
+  
+  uint8_t _touchSmoothedSize;
+  uint8_t _touchSmoothedFilledCount;
+  uint8_t _touchSmoothedIndex;
+  uint16_t *_touchSmoothedX;
+  uint16_t *_touchSmoothedY;
 };
 
 // Colors (RGB565)
