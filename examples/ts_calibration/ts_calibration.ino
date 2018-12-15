@@ -141,8 +141,8 @@ void waitForTouchEvent(tsPoint_t * point)
     {
       point->x = x;
       point->y = y;
-      Serial.print("Touch: ");
-      Serial.print(point->x); Serial.print(", "); Serial.println(point->y);
+      //Serial.print("Touch: ");
+      //Serial.print(point->x); Serial.print(", "); Serial.println(point->y);
     }
   }
 }
