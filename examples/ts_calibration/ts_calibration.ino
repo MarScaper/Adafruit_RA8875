@@ -1,12 +1,11 @@
-#include <SPI.h>
 #include "Adafruit_GFX.h"
 #include "Adafruit_RA8875.h"
 
-#define RA8875_INT     3
+#define RA8875_INT     4
 #define RA8875_CS      10
 #define RA8875_RESET   9
 
-Adafruit_RA8875 tft = Adafruit_RA8875(RA8875_CS, RA8875_RESET);
+Adafruit_RA8875 tft = Adafruit_RA8875(RA8875_CS, RA8875_RESET, RA8875_INT);
 tsPoint_t       _tsLCDPoints[3]; 
 tsPoint_t       _tsTSPoints[3]; 
 tsMatrix_t      _tsMatrix;
@@ -61,16 +60,6 @@ int setCalibrationMatrix( tsPoint_t * displayPtr, tsPoint_t * screenPtr, tsMatri
     matrixPtr->Fn = (screenPtr[2].x * displayPtr[1].y - screenPtr[1].x * displayPtr[2].y) * screenPtr[0].y +
                     (screenPtr[0].x * displayPtr[2].y - screenPtr[2].x * displayPtr[0].y) * screenPtr[1].y +
                     (screenPtr[1].x * displayPtr[0].y - screenPtr[0].x * displayPtr[1].y) * screenPtr[2].y ;
-
-    // Persist data to EEPROM
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_AN, matrixPtr->An);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_BN, matrixPtr->Bn);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_CN, matrixPtr->Cn);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_DN, matrixPtr->Dn);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_EN, matrixPtr->En);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_FN, matrixPtr->Fn);
-    // eepromWriteS32(CFG_EEPROM_TOUCHSCREEN_CAL_DIVIDER, matrixPtr->Divider);
-    // eepromWriteU8(CFG_EEPROM_TOUCHSCREEN_CALIBRATED, 1);
   }
 
   return( retValue ) ;
@@ -121,30 +110,21 @@ int calibrateTSPoint( tsPoint_t * displayPtr, tsPoint_t * screenPtr, tsMatrix_t 
 
 /**************************************************************************/
 /*!
-    @brief  Waits for a touch event
-*/
+ @brief  Detect a touch event
+ */
 /**************************************************************************/
-void waitForTouchEvent(tsPoint_t * point)
+bool detectTouchEvent(tsPoint_t * point)
 {
-  /* Clear the touch data object and placeholder variables */
-  memset(point, 0, sizeof(tsPoint_t));
-  
-  /* Clear any previous interrupts to avoid false buffered reads */
-  uint16_t x, y;
-  tft.touchRead(&x, &y);
-  delay(1);
+  point->x = 0;
+  point->y = 0;
   
   /* Make sure this is really a touch event */
   if (tft.touched())
   {
-    if( tft.touchRead(&x, &y, true) )
-    {
-      point->x = x;
-      point->y = y;
-      //Serial.print("Touch: ");
-      //Serial.print(point->x); Serial.print(", "); Serial.println(point->y);
-    }
+    return tft.touchRead(&point->x, &point->y);
   }
+  
+  return false;
 }
 
 
@@ -159,19 +139,26 @@ tsPoint_t renderCalibrationScreen(uint16_t x, uint16_t y, uint16_t radius)
   tft.fillScreen(RA8875_WHITE);
   tft.drawCircle(x, y, radius, RA8875_RED);
   tft.drawCircle(x, y, radius + 2, 0x8410);  /* 50% Gray */
-
+  
   // Wait for a valid touch events
   tsPoint_t point = { 0, 0 };
   
   /* Keep polling until the TS event flag is valid */
-  bool valid = false;
-  while (!valid)
+  bool valid;
+  do
   {
-    waitForTouchEvent(&point);
-    if (point.x || point.y) 
-    {
-      valid = true;
-    }
+    /* Clear any previous interrupts to avoid false buffered reads */
+    tft.touchRead(&point.x, &point.y);
+    delay(1);
+
+    /* Try to detect new touch event */
+    valid = detectTouchEvent(&point);
+    
+  }while(valid==false);
+  
+  /* Wait around for a new touch event (INT pin goes low) */
+  while (digitalRead(RA8875_INT))
+  {
   }
   
   return point;
@@ -263,44 +250,27 @@ void setup()
 {
   Serial.begin(9600);
   Serial.println("Hello, RA8875!");
-
+  
   /* Initialise the display using 'RA8875_480x272' or 'RA8875_800x480' */
-    if (!tft.begin(RA8875_480x272)) 
+  if (!tft.begin(RA8875_480x272))
   {
     Serial.println("RA8875 not found ... check your wires!");
     while (1);
   }
-
+  
   /* Enables the display and sets up the backlight */
   Serial.println("Found RA8875");
   tft.displayOn(true);
-  tft.GPIOX(true); // Enable TFT - display enable tied to GPIOX
-  tft.PWM1config(true, RA8875_PWM_CLK_DIV1024); // PWM output for backlight
-  tft.PWM1out(255);
-
+  
   /* Enable the touch screen */
   Serial.println("Enabled the touch screen");
-  pinMode(RA8875_INT, INPUT);
-  digitalWrite(RA8875_INT, HIGH);
-  tft.touchEnable(true);
-
-  // Enable smoothing with a cicular fifo of 50 values
-  tft.touchSmoothed(50);
-
-  // Try some GFX acceleration!
-  //tft.drawCircle(100, 100, 50, RA8875_BLACK);
-  //tft.fillCircle(100, 100, 49, RA8875_GREEN);
-  //tft.drawPixel(10,10,RA8875_BLACK);
-  //tft.drawPixel(11,11,RA8875_BLACK);
-  //tft.drawRect(10, 10, 400, 200, RA8875_GREEN);
-  //tft.fillRect(11, 11, 398, 198, RA8875_BLUE);
-  //tft.drawLine(10, 10, 200, 100, RA8875_RED);
+  tft.touchEnable(true,100);
   
   tft.fillScreen(RA8875_WHITE);
   delay(100);
-    
+  
   /* Start the calibration process */
-  tsCalibrate();  
+  tsCalibrate();
   
   /* _tsMatrix should now be populated with the correct coefficients! */
   Serial.println("Waiting for touch events ...");
@@ -316,13 +286,12 @@ void loop()
   tsPoint_t raw;
   tsPoint_t calibrated;
 
-  /* Wait around for a touch event */
-  waitForTouchEvent(&raw);
+  /* Detect a touch event */
+  detectTouchEvent(&raw);
   
   /* Calcuate the real X/Y position based on the calibration matrix */
   calibrateTSPoint(&calibrated, &raw, &_tsMatrix );
   
   /* Draw a single pixel at the calibrated point */
-  tft.fillCircle(calibrated.x, calibrated.y, 3, RA8875_BLACK);
+  tft.fillCircle(calibrated.x, calibrated.y, 1, RA8875_BLACK);
 }
-

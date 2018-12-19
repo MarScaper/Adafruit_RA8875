@@ -60,9 +60,10 @@
       @args RST[in] Location of the reset pin
 */
 /**************************************************************************/
-Adafruit_RA8875::Adafruit_RA8875(uint8_t CS, uint8_t RST) : Adafruit_GFX(800, 480) {
+Adafruit_RA8875::Adafruit_RA8875(uint8_t CS, uint8_t RST, uint8_t TC) : Adafruit_GFX(800, 480) {
   _cs = CS;
   _rst = RST;
+  _tc = TC;
   
   _touchSmoothedSize = 0;
   _touchSmoothedFilledCount = 0;
@@ -1105,8 +1106,19 @@ void Adafruit_RA8875::PWM2config(boolean on, uint8_t clock) {
       Enables or disables the on-chip touch screen controller
 */
 /**************************************************************************/
-void Adafruit_RA8875::touchEnable(boolean on) 
+void Adafruit_RA8875::touchEnable(boolean on,uint8_t smoothing)
 {
+  if( _tc != -1 )
+  {
+    pinMode(_tc, INPUT);
+    digitalWrite(_tc, HIGH);
+    
+    if( smoothing )
+    {
+      touchSmoothed(smoothing);
+    }
+  }
+  
   uint8_t   adcClk = (uint8_t) RA8875_TPCR0_ADCCLK_DIV4;
 
   if ( _size == RA8875_800x480 ) //match up touch size with LCD size
@@ -1145,26 +1157,14 @@ void Adafruit_RA8875::touchEnable(boolean on)
 /**************************************************************************/
 boolean Adafruit_RA8875::touched(void) 
 {
-  static bool first = true;
-  
   if (readReg(RA8875_INTC2) & RA8875_INTC2_TP)
   {
-   // Serial.println("here");
-   /* if( first == true )
-    {
-      first = false;
-      _touchSmoothedFilledCount = 0;
-      _touchSmoothedIndex = 0;
-      
-      Serial.println("yep");
-    }*/
-    
     return true;
   }
-  
+
   _touchSmoothedFilledCount = 0;
   _touchSmoothedIndex = 0;
-  
+
   return false;
 }
 
@@ -1179,7 +1179,7 @@ boolean Adafruit_RA8875::touched(void)
             the RA8875, resetting the flag used by the 'touched' function
 */
 /**************************************************************************/
-boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y, bool smoothed)
+boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y)
 {
   uint16_t tx, ty;
   uint8_t temp;
@@ -1193,7 +1193,7 @@ boolean Adafruit_RA8875::touchRead(uint16_t *x, uint16_t *y, bool smoothed)
   tx |= temp & 0x03;        // get the bottom x bits
   ty |= (temp >> 2) & 0x03; // get the bottom y bits
 
-  if( !_touchSmoothedSize || smoothed == false)
+  if( !_touchSmoothedSize )
   {
     *x = tx;
     *y = ty;
@@ -1282,8 +1282,14 @@ void Adafruit_RA8875::touchSmoothed(uint8_t touchSmoothedSize)
 /**************************************************************************/
 void Adafruit_RA8875::displayOn(boolean on) 
 {
- if (on) 
+ if (on)
+ {
    writeReg(RA8875_PWRR, RA8875_PWRR_NORMAL | RA8875_PWRR_DISPON);
+   
+   GPIOX(true); // Enable TFT - display enable tied to GPIOX
+   PWM1config(true, RA8875_PWM_CLK_DIV1024); // PWM output for backlight
+   setLuminosity(255);
+ }
  else
    writeReg(RA8875_PWRR, RA8875_PWRR_NORMAL | RA8875_PWRR_DISPOFF);
 }

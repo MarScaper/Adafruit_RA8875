@@ -48,8 +48,8 @@ enum RA8875sizes { RA8875_480x272, RA8875_800x480 };
 // Touch screen cal structs
 typedef struct Point 
 {
-  int32_t x;
-  int32_t y;
+  uint16_t x;
+  uint16_t y;
 } tsPoint_t;
 
 typedef struct //Matrix
@@ -65,7 +65,7 @@ typedef struct //Matrix
 
 class Adafruit_RA8875 : public Adafruit_GFX {
  public:
-  Adafruit_RA8875(uint8_t cs, uint8_t rst);
+  Adafruit_RA8875(uint8_t cs, uint8_t rst, uint8_t tc=-1);
   
   boolean begin(enum RA8875sizes s);
   void    softReset(void);
@@ -106,6 +106,7 @@ class Adafruit_RA8875 : public Adafruit_GFX {
   void    fillCurve(int16_t xCenter, int16_t yCenter, int16_t longAxis, int16_t shortAxis, uint8_t curvePart, uint16_t color);
   
   /* Backlight */
+  void    setLuminosity(uint8_t luminosity){PWM1out(luminosity);};
   void    GPIOX(boolean on);
   void    PWM1config(boolean on, uint8_t clock);
   void    PWM2config(boolean on, uint8_t clock);
@@ -113,9 +114,9 @@ class Adafruit_RA8875 : public Adafruit_GFX {
   void    PWM2out(uint8_t p);
 
   /* Touch screen */
-  void    touchEnable(boolean on);
+  void    touchEnable(boolean on, uint8_t smoothing = 0);
   boolean touched(void);
-  boolean touchRead(uint16_t *x, uint16_t *y, bool smoothed = false);
+  boolean touchRead(uint16_t *x, uint16_t *y);
   void    touchSmoothed(uint8_t);
 
   /* Low level access */
@@ -150,7 +151,7 @@ class Adafruit_RA8875 : public Adafruit_GFX {
   void ellipseHelper(int16_t xCenter, int16_t yCenter, int16_t longAxis, int16_t shortAxis, uint16_t color, bool filled);
   void curveHelper(int16_t xCenter, int16_t yCenter, int16_t longAxis, int16_t shortAxis, uint8_t curvePart, uint16_t color, bool filled);
 
-  uint8_t _cs, _rst;
+  uint8_t _cs, _rst, _tc;
   uint16_t _width, _height;
   uint8_t _textScale;
   enum RA8875sizes _size;
